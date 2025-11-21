@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calcolatore Indice di Rischio - Settore Metalmeccanico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div id="app"></div>
+
+    <script>
+        const questions = [
+            {
+                id: 'descrizione',
+                title: 'A. Attività',
+                question: 'Descrizione Attività',
+                type: 'text',
+                placeholder: 'Es: Produzione ingranaggi, lavorati metallici, ecc.',
+                coefficient: null
+            },
+            {
+                id: 'lavorazioni_caldo',
+                title: 'B. Processi Produttivi',
+                question: 'Lavorazioni a caldo',
+                type: 'radio',
+                options: [
+                    { label: 'Sì', value: 'si', coefficient: 1.10 },
+                    { label: 'No', value: 'no', coefficient: 0.90 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'rivestimenti',
+                question: 'Rivestimenti (Galvanica, ecc.)',
+                type: 'radio',
+                options: [
+                    { label: 'Sì', value: 'si', coefficient: 1.15 },
+                    { label: 'No', value: 'no', coefficient: 1.00 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'infiammabili',
+                question: 'Sostanze Infiammabili (Vernici, ecc.)',
+                type: 'radio',
+                options: [
+                    { label: 'Sì', value: 'si', coefficient: 1.20 },
+                    { label: 'No', value: 'no', coefficient: 1.00 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'fluido',
+                question: 'Fluido Lubrorefrigerante',
+                type: 'radio',
+                options: [
+                    { label: 'Olio Intero', value: 'olio', coefficient: 1.20 },
+                    { label: 'Emulsione', value: 'emulsione', coefficient: 1.00 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'centraline',
+                question: 'Centraline Idrauliche (> 200L)',
+                type: 'radio',
+                options: [
+                    { label: 'Sì (Presenti e > 200L)', value: 'si', coefficient: 1.10 },
+                    { label: 'No (Assenti o < 200L)', value: 'no', coefficient: 1.00 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'pannelli',
+                title: 'C. Tipologia Costruttiva',
+                question: 'Pannelli Sandwich',
+                type: 'radio',
+                options: [
+                    { label: 'Sì', value: 'si', coefficient: 1.20 },
+                    { label: 'No', value: 'no', coefficient: 1.00 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'legno',
+                question: 'Strutture in Legno',
+                type: 'radio',
+                options: [
+                    { label: 'Sì', value: 'si', coefficient: 1.05 },
+                    { label: 'No', value: 'no', coefficient: 1.00 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'cemento',
+                question: 'Struttura Prevalente in Cemento',
+                type: 'radio',
+                options: [
+                    { label: 'Sì (Pareti/Tetto)', value: 'si', coefficient: 0.95 },
+                    { label: 'No', value: 'no', coefficient: 1.00 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'tensostrutture',
+                question: 'Tensostrutture',
+                type: 'radio',
+                options: [
+                    { label: 'Sì', value: 'si', coefficient: 1.05 },
+                    { label: 'No', value: 'no', coefficient: 1.00 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'contesto',
+                title: 'D. Contesto Esterno (Esposizioni)',
+                question: 'Scenario di Esposizione',
+                type: 'radio',
+                options: [
+                    { label: 'Basso Rischio - Solo campi agricoli o abitazioni civili su 4 lati', value: 'basso', coefficient: 0.85 },
+                    { label: 'Rischio Medio - Misto (es. 2 lati agricoli, 2 lati industriali)', value: 'medio', coefficient: 1.00 },
+                    { label: 'Alto Rischio - Zona industriale su tutti i 4 lati', value: 'alto', coefficient: 1.10 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'imballaggi',
+                title: 'E. Carico d\'Incendio e Gestione',
+                question: 'Imballaggi (Cartone/Pallets)',
+                type: 'radio',
+                options: [
+                    { label: 'Sì', value: 'si', coefficient: 1.05 },
+                    { label: 'No (es. casse metalliche)', value: 'no', coefficient: 0.95 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'compartimentazione',
+                question: 'Compartimentazione Magazzino',
+                type: 'radio',
+                options: [
+                    { label: 'Sì', value: 'si', coefficient: 1.00 },
+                    { label: 'No', value: 'no', coefficient: 1.10 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'divieto_fumo',
+                title: 'F. Misure di Prevenzione e Protezione',
+                question: 'Divieto di Fumo Rispettato',
+                type: 'radio',
+                options: [
+                    { label: 'Sì', value: 'si', coefficient: 1.00 },
+                    { label: 'No', value: 'no', coefficient: 1.10 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'ricarica_muletti',
+                question: 'Ricarica Muletti',
+                type: 'radio',
+                options: [
+                    { label: 'Interno depositi', value: 'depositi', coefficient: 1.10 },
+                    { label: 'In Produzione', value: 'produzione', coefficient: 1.05 },
+                    { label: 'Esterno', value: 'esterno', coefficient: 0.95 },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            },
+            {
+                id: 'rete_idranti',
+                question: 'Rete Idranti',
+                type: 'radio',
+                options: [
+                    { label: 'Presente', value: 'presente', coefficient: 0.95 },
+                    { label: 'Assente', value: 'assente', coefficient: null },
+                    { label: 'Non so / Non applicabile', value: 'na', coefficient: 1.00 }
+                ]
+            }
+        ];
+
+        let currentStep = 0;
+        let answers = {};
+        let showResult = false;
+
+        function calculateRisk() {
+            let coefficient = 1.0;
+            
+            Object.keys(answers).forEach(key => {
+                if (key !== 'rete_idranti' && key !== 'descrizione' && answers[key].coefficient !== null) {
+                    coefficient *= answers[key].coefficient;
+                }
+            });
+
+            if (answers.rete_idranti) {
+                if (answers.rete_idranti.value === 'presente') {
+                    coefficient *= 0.95;
+                } else if (answers.rete_idranti.value === 'assente') {
+                    const hasLavorazioniCaldo = answers.lavorazioni_caldo?.value === 'si';
+                    const hasInfiammabili = answers.infiammabili?.value === 'si';
+                    const hasImballaggi = answers.imballaggi?.value === 'si';
+                    
+                    if (!hasLavorazioniCaldo && !hasInfiammabili && !hasImballaggi) {
+                        coefficient *= 1.00;
+                    } else {
+                        coefficient *= 1.15;
+                    }
+                }
+            }
+
+            return coefficient;
+        }
+
+        function getRiskLevel(coeff) {
+            if (coeff < 0.95) return { level: 'Basso', color: 'text-green-600', bg: 'bg-green-50' };
+            if (coeff < 1.10) return { level: 'Medio', color: 'text-yellow-600', bg: 'bg-yellow-50' };
+            return { level: 'Alto', color: 'text-red-600', bg: 'bg-red-50' };
+        }
+
+        function generateNarrativeJudgment() {
+            const descrizione = answers.descrizione?.value || 'attività metalmeccanica non specificata';
+            let narrative = `L'azienda svolge attività di ${descrizione}. `;
+
+            if (answers.lavorazioni_caldo?.value === 'si') {
+                narrative += 'L\'attività prevede lavorazioni a caldo, che incrementano il profilo di rischio incendio. ';
+            } else if (answers.lavorazioni_caldo?.value === 'no') {
+                narrative += 'Non sono presenti lavorazioni a caldo, riducendo il rischio termico. ';
+            }
+
+            if (answers.rivestimenti?.value === 'si') {
+                narrative += 'Sono presenti processi di rivestimento quali galvanica o similari, che comportano l\'utilizzo di sostanze chimiche potenzialmente pericolose. ';
+            }
+
+            if (answers.infiammabili?.value === 'si') {
+                narrative += 'Vengono utilizzate sostanze infiammabili come vernici o solventi, aumentando significativamente il rischio di incendio. ';
+            } else if (answers.infiammabili?.value === 'no') {
+                narrative += 'Non si fa uso di sostanze infiammabili significative. ';
+            }
+
+            if (answers.fluido?.value === 'olio') {
+                narrative += 'Per la lubrificazione viene impiegato olio intero, che presenta maggiore infiammabilità rispetto alle emulsioni. ';
+            } else if (answers.fluido?.value === 'emulsione') {
+                narrative += 'Viene utilizzata emulsione come fluido lubrorefrigerante, con profilo di rischio contenuto. ';
+            }
+
+            if (answers.centraline?.value === 'si') {
+                narrative += 'Sono presenti centraline idrauliche con capacità superiore a 200 litri, che costituiscono un ulteriore fattore di rischio. ';
+            }
+
+            const hasConstructionInfo = answers.pannelli?.value !== 'na' || answers.legno?.value !== 'na' || 
+                                         answers.cemento?.value !== 'na' || answers.tensostrutture?.value !== 'na';
+            
+            if (hasConstructionInfo) {
+                narrative += '\n\nDal punto di vista costruttivo, ';
+                
+                if (answers.pannelli?.value === 'si') {
+                    narrative += 'l\'edificio presenta pannelli sandwich, materiale che può favorire la propagazione rapida delle fiamme. ';
+                }
+
+                if (answers.legno?.value === 'si') {
+                    narrative += 'Sono presenti strutture in legno, che incrementano il carico di incendio strutturale. ';
+                }
+
+                if (answers.cemento?.value === 'si') {
+                    narrative += 'La struttura prevalente è in cemento armato (pareti e/o tetto), offrendo una buona resistenza al fuoco. ';
+                }
+
+                if (answers.tensostrutture?.value === 'si') {
+                    narrative += 'Sono presenti tensostrutture che possono rappresentare una criticità in caso di incendio. ';
+                }
+            }
+
+            if (answers.contesto?.value !== 'na') {
+                narrative += '\n\nRiguardo al contesto esterno, ';
+                
+                if (answers.contesto?.value === 'basso') {
+                    narrative += 'l\'azienda è circondata prevalentemente da campi agricoli o abitazioni civili, con basso rischio di propagazione da insediamenti limitrofi. ';
+                } else if (answers.contesto?.value === 'medio') {
+                    narrative += 'il contesto è misto, con presenza sia di zone agricole che industriali, determinando un rischio medio di esposizione. ';
+                } else if (answers.contesto?.value === 'alto') {
+                    narrative += 'l\'azienda è inserita in una zona completamente industriale, con elevato rischio di propagazione da insediamenti adiacenti. ';
+                }
+            }
+
+            const hasFireLoadInfo = answers.imballaggi?.value !== 'na' || answers.compartimentazione?.value !== 'na';
+            
+            if (hasFireLoadInfo) {
+                narrative += '\n\nIn termini di carico d\'incendio, ';
+                
+                if (answers.imballaggi?.value === 'si') {
+                    narrative += 'vengono impiegati imballaggi combustibili quali cartone e pallets in legno, che aumentano il materiale combustibile presente. ';
+                } else if (answers.imballaggi?.value === 'no') {
+                    narrative += 'si utilizzano prevalentemente casse metalliche o imballaggi non combustibili, limitando il carico di incendio. ';
+                }
+
+                if (answers.compartimentazione?.value === 'si') {
+                    narrative += 'Il magazzino risulta compartimentato, limitando la possibile propagazione di un incendio. ';
+                } else if (answers.compartimentazione?.value === 'no') {
+                    narrative += 'Il magazzino non è compartimentato, con maggiore rischio di propagazione delle fiamme. ';
+                }
+            }
+
+            narrative += '\n\nPer quanto riguarda le misure di prevenzione e protezione, ';
+            
+            if (answers.divieto_fumo?.value === 'si') {
+                narrative += 'il divieto di fumo viene rispettato correttamente. ';
+            } else if (answers.divieto_fumo?.value === 'no') {
+                narrative += 'il divieto di fumo non viene adeguatamente rispettato, aumentando il rischio di innesco. ';
+            }
+
+            if (answers.ricarica_muletti?.value === 'depositi') {
+                narrative += 'La ricarica dei muletti avviene all\'interno dei depositi, situazione che comporta rischi aggiuntivi. ';
+            } else if (answers.ricarica_muletti?.value === 'produzione') {
+                narrative += 'La ricarica dei muletti avviene in area produzione, con rischio moderato. ';
+            } else if (answers.ricarica_muletti?.value === 'esterno') {
+                narrative += 'La ricarica dei muletti avviene all\'esterno, minimizzando i rischi interni. ';
+            }
+
+            if (answers.rete_idranti?.value === 'presente') {
+                narrative += 'È presente una rete idranti funzionante, che rappresenta un importante presidio antincendio. ';
+            } else if (answers.rete_idranti?.value === 'assente') {
+                const hasRisks = answers.lavorazioni_caldo?.value === 'si' || 
+                                 answers.infiammabili?.value === 'si' || 
+                                 answers.imballaggi?.value === 'si';
+                if (hasRisks) {
+                    narrative += 'Non è presente una rete idranti, circostanza particolarmente critica considerati i rischi presenti nell\'attività. ';
+                } else {
+                    narrative += 'Non è presente una rete idranti, situazione accettabile dato il profilo di rischio contenuto dell\'attività. ';
+                }
+            }
+
+            return narrative;
+        }
+
+        function generateAttentionPoints() {
+            const points = [];
+
+            if (answers.lavorazioni_caldo?.value === 'si' || answers.centraline?.value === 'si') {
+                points.push('Verificare la presenza di interblocchi automatici per il fermo delle pompe olio in caso di emergenza, data la presenza di lavorazioni a caldo e/o centraline oleodinamiche di grande capacità.');
+            }
+
+            if (answers.rivestimenti?.value === 'si') {
+                points.push('Assicurarsi che sia presente un sistema di stop automatico del riscaldamento dei bagni galvanici qualora il livello del bagno scenda sotto la soglia di sicurezza, per evitare surriscaldamenti pericolosi.');
+            }
+
+            if (answers.ricarica_muletti?.value && answers.ricarica_muletti.value !== 'esterno') {
+                points.push('Mantenere una distanza di sicurezza di almeno 3 metri tra la postazione di ricarica dei muletti e lo stoccaggio di merci, per limitare la propagazione in caso di incendio della postazione di ricarica.');
+            }
+
+            if (answers.divieto_fumo?.value === 'no') {
+                points.push('Implementare misure più stringenti per garantire il rispetto del divieto di fumo, intensificando i controlli e la formazione del personale sui rischi di innesco incendio.');
+            }
+
+            if (answers.rete_idranti?.value === 'assente') {
+                const hasVulnerableStructure = answers.legno?.value === 'si' || answers.pannelli?.value === 'si';
+                if (hasVulnerableStructure) {
+                    points.push('Considerare seriamente l\'installazione di una rete idranti, tanto più necessaria in presenza di elementi costruttivi in legno e/o pannelli sandwich che possono favorire una rapida propagazione delle fiamme.');
+                } else {
+                    points.push('Valutare l\'installazione di una rete idranti quale importante presidio antincendio, che costituisce una misura di protezione attiva fondamentale per qualsiasi attività produttiva.');
+                }
+            }
+
+            if (answers.pannelli?.value === 'si') {
+                points.push('Preferire pannelli sandwich con isolamento in materiali minerali (lana di roccia) o con isolamento plastico trattato per la reazione al fuoco (classe A1 o A2), evitando pannelli con isolamento in materiale plastico non trattato che può favorire la propagazione dell\'incendio.');
+            }
+
+            return points;
+        }
+
+        function generatePDF() {
+            const finalCoefficient = calculateRisk();
+            const risk = getRiskLevel(finalCoefficient);
+            const today = new Date().toLocaleDateString('it-IT');
+            const narrative = generateNarrativeJudgment();
+            const attentionPoints = generateAttentionPoints();
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            let yPos = 20;
+            const pageWidth = doc.internal.pageSize.width;
+            const margin = 20;
+            const maxWidth = pageWidth - 2 * margin;
+
+            doc.setFontSize(18);
+            doc.setFont(undefined, 'bold');
+            doc.text('REPORT VALUTAZIONE RISCHIO AZIENDALE', pageWidth / 2, yPos, { align: 'center' });
+            yPos += 10;
+            
+            doc.setFontSize(12);
+            doc.text('Settore Metalmeccanico', pageWidth / 2, yPos, { align: 'center' });
+            yPos += 6;
+            
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Data: ${today}`, pageWidth / 2, yPos, { align: 'center' });
+            yPos += 15;
+
+            doc.setLineWidth(0.5);
+            doc.line(margin, yPos, pageWidth - margin, yPos);
+            yPos += 10;
+
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text('RISULTATO FINALE', margin, yPos);
+            yPos += 8;
+
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Coefficiente di Rischio: ${finalCoefficient.toFixed(3)}`, margin, yPos);
+            yPos += 6;
+            doc.text(`Livello di Rischio: ${risk.level}`, margin, yPos);
+            yPos += 12;
+
+            doc.line(margin, yPos, pageWidth - margin, yPos);
+            yPos += 10;
+
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text('GIUDIZIO TECNICO', margin, yPos);
+            yPos += 8;
+
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            
+            const paragraphs = narrative.split('\n\n');
+            paragraphs.forEach((paragraph) => {
+                const lines = doc.splitTextToSize(paragraph.trim(), maxWidth);
+                lines.forEach((line) => {
+                    if (yPos > 270) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    doc.text(line, margin, yPos);
+                    yPos += 6;
+                });
+                yPos += 3;
+            });
+
+            yPos += 5;
+
+            if (attentionPoints.length > 0) {
+                if (yPos > 240) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                
+                doc.line(margin, yPos, pageWidth - margin, yPos);
+                yPos += 10;
+
+                doc.setFontSize(14);
+                doc.setFont(undefined, 'bold');
+                doc.text('PUNTI DI ATTENZIONE', margin, yPos);
+                yPos += 8;
+
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+
+                attentionPoints.forEach((point, index) => {
+                    const bulletPoint = `${index + 1}. ${point}`;
+                    const lines = doc.splitTextToSize(bulletPoint, maxWidth - 5);
+                    lines.forEach((line) => {
+                        if (yPos > 275) {
+                            doc.addPage();
+                            yPos = 20;
+                        }
+                        doc.text(line, margin + 5, yPos);
+                        yPos += 6;
+                    });
+                    yPos += 2;
+                });
+
+                yPos += 5;
+            }
+
+            if (yPos > 250) {
+                doc.addPage();
+                yPos = 20;
+            }
+            doc.line(margin, yPos, pageWidth - margin, yPos);
+            yPos += 10;
+
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text('DETTAGLIO RISPOSTE', margin, yPos);
+            yPos += 8;
+
+            doc.setFontSize(9);
+            doc.setFont(undefined, 'normal');
+
+            questions.forEach((q) => {
+                if (yPos > 270) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                if (q.id === 'descrizione') {
+                    doc.setFont(undefined, 'bold');
+                    doc.text(`${q.question}:`, margin, yPos);
+                    yPos += 5;
+                    doc.setFont(undefined, 'normal');
+                    const descLines = doc.splitTextToSize(answers[q.id]?.value || 'N/A', maxWidth - 5);
+                    descLines.forEach((line) => {
+                        doc.text(line, margin + 5, yPos);
+                        yPos += 5;
+                    });
+                    yPos += 3;
+                } else if (answers[q.id]) {
+                    const option = q.options?.find(opt => opt.value === answers[q.id].value);
+                    if (q.title && questions.indexOf(q) > 0 && questions[questions.indexOf(q) - 1].title !== q.title) {
+                        yPos += 3;
+                        doc.setFont(undefined, 'bold');
+                        doc.text(q.title, margin, yPos);
+                        yPos += 5;
+                        doc.setFont(undefined, 'normal');
+                    }
+                    
+                    let answerText = `${q.question}: ${option?.label}`;
+                    if (answers[q.id].coefficient) {
+                        answerText += ` (×${answers[q.id].coefficient.toFixed(2)})`;
+                    }
+                    
+                    const answerLines = doc.splitTextToSize(answerText, maxWidth);
+                    answerLines.forEach((line) => {
+                        if (yPos > 280) {
+                            doc.addPage();
+                            yPos = 20;
+                        }
+                        doc.text(line, margin, yPos);
+                        yPos += 5;
+                    });
+                }
+            });
+
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setFont(undefined, 'italic');
+                doc.text(
+                    'Documento generato dal Calcolatore Indice di Rischio - Settore Metalmeccanico',
+                    pageWidth / 2,
+                    doc.internal.pageSize.height - 10,
+                    { align: 'center' }
+                );
+            }
+
+            doc.save(`Report_Rischio_${today.replace(/\//g, '-')}.pdf`);
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            
+            if (showResult) {
+                const finalCoefficient = calculateRisk();
+                const risk = getRiskLevel(finalCoefficient);
+                const narrative = generateNarrativeJudgment();
+                const attentionPoints = generateAttentionPoints();
+
+                app.innerHTML = `
+                    <div class="p-4 md:p-8">
+                        <div class="max-w-3xl mx-auto">
+                            <div class="bg-white rounded-xl shadow-2xl p-6 md:p-10">
+                                <div class="text-center mb-8">
+                                    <div class="inline-flex items-center justify-center w-16 h-16 bg-indigo-100 rounded-full mb-4">
+                                        <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                        </svg>
+                                    </div>
+                                    <h1 class="text-3xl font-bold text-gray-800 mb-2">Risultato Finale</h1>
+                                    <p class="text-gray-600">Calcolatore Indice di Rischio - Settore Metalmeccanico</p>
+                                </div>
+
+                                <div class="${risk.bg} rounded-lg p-8 mb-6 text-center">
+                                    <p class="text-sm text-gray-600 mb-2">Coefficiente di Rischio</p>
+                                    <p class="text-5xl font-bold ${risk.color} mb-3">
+                                        ${finalCoefficient.toFixed(3)}
+                                    </p>
+                                    <div class="inline-block px-4 py-2 rounded-full ${risk.color} bg-white">
+                                        <p class="font-semibold">Livello: ${risk.level}</p>
+                                    </div>
+                                </div>
+
+                                <div class="bg-gray-50 rounded-lg p-6 mb-6">
+                                    <h3 class="font-semibold text-gray-800 mb-4">Riepilogo Risposte</h3>
+                                    <div class="space-y-2 max-h-96 overflow-y-auto">
+                                        ${questions.map(q => {
+                                            if (q.id === 'descrizione') {
+                                                return `<div class="text-sm">
+                                                    <span class="font-medium text-gray-700">${q.question}:</span>
+                                                    <span class="text-gray-600">${answers[q.id]?.value || 'N/A'}</span>
+                                                </div>`;
+                                            }
+                                            if (answers[q.id]) {
+                                                const option = q.options?.find(opt => opt.value === answers[q.id].value);
+                                                return `<div class="text-sm">
+                                                    <span class="font-medium text-gray-700">${q.question}:</span>
+                                                    <span class="text-gray-600">${option?.label}</span>
+                                                    ${answers[q.id].coefficient ? `<span class="text-indigo-600 ml-2">(×${answers[q.id].coefficient.toFixed(2)})</span>` : ''}
+                                                </div>`;
+                                            }
+                                            return '';
+                                        }).join('')}
+                                    </div>
+                                </div>
+
+                                <div class="bg-blue-50 rounded-lg p-6 mb-6 border-2 border-blue-200">
+                                    <h3 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        Giudizio Tecnico
+                                    </h3>
+                                    <div class="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                                        ${narrative}
+                                    </div>
+                                </div>
+
+                                ${attentionPoints.length > 0 ? `
+                                    <div class="bg-orange-50 rounded-lg p-6 mb-6 border-2 border-orange-200">
+                                        <h3 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                            <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            </svg>
+                                            Punti di Attenzione
+                                        </h3>
+                                        <ul class="space-y-3">
+                                            ${attentionPoints.map(point => `
+                                                <li class="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                                    <span class="text-orange-600 font-bold mt-0.5">•</span>
+                                                    <span>${point}</span>
+                                                </li>
+                                            `).join('')}
+                                        </ul>
+                                    </div>
+                                ` : ''}
+
+                                <button onclick="reset()" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors">
+                                    Nuova Valutazione
+                                </button>
+
+                                <button onclick="generatePDF()" class="w-full mt-3 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Genera Report PDF
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                const currentQuestion = questions[currentStep];
+                const isAnswered = answers[currentQuestion.id] !== undefined;
+
+                app.innerHTML = `
+                    <div class="p-4 md:p-8">
+                        <div class="max-w-3xl mx-auto">
+                            <div class="bg-white rounded-xl shadow-2xl p-6 md:p-10">
+                                <div class="mb-8">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <h1 class="text-2xl md:text-3xl font-bold text-gray-800">
+                                            Calcolatore Indice di Rischio
+                                        </h1>
+                                        <div class="text-sm text-gray-500">
+                                            ${currentStep + 1} / ${questions.length}
+                                        </div>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div class="bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: ${((currentStep + 1) / questions.length) * 100}%"></div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-8">
+                                    ${currentQuestion.title ? `<h2 class="text-xl font-bold text-indigo-600 mb-4">${currentQuestion.title}</h2>` : ''}
+                                    <h3 class="text-lg md:text-xl font-semibold text-gray-800 mb-6">
+                                        ${currentQuestion.question}
+                                    </h3>
+
+                                    ${currentQuestion.type === 'text' ? `
+                                        <input
+                                            type="text"
+                                            id="textInput"
+                                            placeholder="${currentQuestion.placeholder}"
+                                            value="${answers[currentQuestion.id]?.value || ''}"
+                                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none text-lg"
+                                        />
+                                    ` : `
+                                        <div class="space-y-3">
+                                            ${currentQuestion.options.map(option => `
+                                                <button
+                                                    onclick="selectOption('${currentQuestion.id}', '${option.value}', ${option.coefficient})"
+                                                    class="w-full p-4 text-left rounded-lg border-2 transition-all ${
+                                                        answers[currentQuestion.id]?.value === option.value
+                                                            ? 'border-indigo-600 bg-indigo-50'
+                                                            : 'border-gray-300 hover:border-indigo-300 bg-white'
+                                                    }"
+                                                >
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="font-medium text-gray-800">${option.label}</span>
+                                                        ${option.coefficient !== null ? `<span class="text-sm text-indigo-600 font-semibold">×${option.coefficient.toFixed(2)}</span>` : ''}
+                                                    </div>
+                                                </button>
+                                            `).join('')}
+                                        </div>
+                                    `}
+                                </div>
+
+                                <div class="flex gap-4">
+                                    ${currentStep > 0 ? `
+                                        <button onclick="prevStep()" class="flex-1 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors">
+                                            Indietro
+                                        </button>
+                                    ` : ''}
+                                    <button
+                                        onclick="nextStep()"
+                                        id="nextButton"
+                                        ${!isAnswered ? 'disabled' : ''}
+                                        class="flex-1 py-3 rounded-lg font-semibold transition-colors ${
+                                            isAnswered
+                                                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        }"
+                                    >
+                                        ${currentStep === questions.length - 1 ? 'Calcola Rischio' : 'Avanti'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                if (currentQuestion.type === 'text') {
+                    const input = document.getElementById('textInput');
+                    const nextButton = document.getElementById('nextButton');
+                    
+                    input.addEventListener('input', (e) => {
+                        answers[currentQuestion.id] = { value: e.target.value, coefficient: null };
+                        
+                        if (e.target.value.trim()) {
+                            nextButton.disabled = false;
+                            nextButton.className = 'flex-1 py-3 rounded-lg font-semibold transition-colors bg-indigo-600 text-white hover:bg-indigo-700';
+                        } else {
+                            nextButton.disabled = true;
+                            nextButton.className = 'flex-1 py-3 rounded-lg font-semibold transition-colors bg-gray-300 text-gray-500 cursor-not-allowed';
+                        }
+                    });
+                }
+            }
+        }
+
+        function selectOption(questionId, value, coefficient) {
+            answers[questionId] = { value, coefficient };
+            render();
+        }
+
+        function handleTextInput(event, questionId) {
+            answers[questionId] = { value: event.target.value, coefficient: null };
+        }
+
+        function nextStep() {
+            const currentQuestion = questions[currentStep];
+            const isAnswered = answers[currentQuestion.id] !== undefined;
+            
+            if (!isAnswered) return;
+            
+            if (currentStep < questions.length - 1) {
+                currentStep++;
+                render();
+            } else {
+                showResult = true;
+                render();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 0) {
+                currentStep--;
+                render();
+            }
+        }
+
+        function reset() {
+            currentStep = 0;
+            answers = {};
+            showResult = false;
+            render();
+        }
+
+        render();
+    </script>
+</body>
+</html>
